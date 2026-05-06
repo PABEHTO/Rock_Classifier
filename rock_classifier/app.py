@@ -19,7 +19,6 @@ BASE_DIR = Path(__file__).resolve().parents[1]
 MODEL_PATH = BASE_DIR / 'models' / 'rock_classifier_mlp.joblib'
 EXPERT_CSV_PATH = BASE_DIR / 'models' / 'expert_knowledge_base.csv'
 METRICS_PATH = BASE_DIR / 'models' / 'training_metrics.txt'
-TRAINING_FEATURES = ('Происхождение', 'Структура', 'Минеральный состав', 'Плотность')
 
 
 class ModeSelectionScreen(tk.Frame):
@@ -215,12 +214,8 @@ class RockClassifierApp(tk.Tk):
         if self.model_training:
             return
 
-        missing_features = [name for name in TRAINING_FEATURES if not self.state.has_property(name)]
-        if missing_features:
-            self.show_validation_warning(
-                'Переобучение не запущено: для обучения ML-модели нужны свойства '
-                f'{", ".join(missing_features)}.',
-            )
+        if not self.state.properties:
+            self.show_validation_warning('Переобучение не запущено: в базе знаний нет ни одного свойства.')
             return
 
         completeness_errors = self.editor_service.run_completeness_check()
@@ -275,10 +270,13 @@ class RockClassifierApp(tk.Tk):
         self.refresh_all_screens()
         accuracy = float(result.get('accuracy', 0.0)) if result else 0.0
         rows = int(result.get('rows', 0)) if result else 0
+        features = result.get('features', []) if result else []
+        features_count = len(features) if isinstance(features, list) else 0
         messagebox.showinfo(
             'Переобучение модели',
             f'ML-модель успешно переобучена.\nТочность на контрольной выборке: {accuracy:.4f}.\n'
-            f'Строк в синтетической выборке: {rows}.',
+            f'Строк в синтетической выборке: {rows}.\n'
+            f'Использовано свойств-признаков: {features_count}.',
             parent=self,
         )
 

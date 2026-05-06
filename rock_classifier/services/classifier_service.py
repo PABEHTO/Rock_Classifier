@@ -24,10 +24,17 @@ class ClassifierService:
         self.ml_classifier = MlRockClassifier(self.model_path)
 
     def feature_row_from_inputs(self, inputs: dict[str, str]) -> dict[str, object]:
+        """Готовит строку признаков для ML по актуальным свойствам базы знаний.
+
+        Раньше ML получал только четыре фиксированных поля. Теперь список полей
+        берётся из состояния приложения, поэтому после добавления нового свойства
+        и переобучения модели оно участвует и в обучении, и в прогнозе.
+        """
         feature_row: dict[str, object] = {}
-        for property_name in ['Происхождение', 'Структура', 'Минеральный состав', 'Плотность']:
+        for definition in self.state.properties:
+            property_name = definition.name
             raw_value = inputs.get(property_name, '').strip()
-            if property_name == 'Плотность':
+            if definition.kind == 'number':
                 feature_row[property_name] = float(raw_value.replace(',', '.')) if raw_value else None
             else:
                 feature_row[property_name] = raw_value or None

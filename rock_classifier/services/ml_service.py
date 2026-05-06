@@ -6,10 +6,16 @@ import pandas as pd
 from joblib import load
 
 
+DEFAULT_FEATURE_COLUMNS = ['Происхождение', 'Структура', 'Минеральный состав', 'Плотность']
+
+
 class MlRockClassifier:
     def __init__(self, model_path: str | Path) -> None:
         self.model_path = Path(model_path)
         self.pipeline = None
+        self.feature_columns: list[str] = DEFAULT_FEATURE_COLUMNS[:]
+        self.categorical_features: list[str] = []
+        self.numeric_features: list[str] = []
         self.error_message = ''
         self._load()
 
@@ -18,7 +24,18 @@ class MlRockClassifier:
             self.error_message = f'Файл модели не найден: {self.model_path}'
             return
         try:
-            self.pipeline = load(self.model_path)
+            loaded = load(self.model_path)
+            if isinstance(loaded, dict) and 'pipeline' in loaded:
+                self.pipeline = loaded['pipeline']
+                self.feature_columns = list(loaded.get('feature_columns') or DEFAULT_FEATURE_COLUMNS)
+                self.categorical_features = list(loaded.get('categorical_features') or [])
+                self.numeric_features = list(loaded.get('numeric_features') or [])
+            else:
+                # Совместимость со старым файлом модели, где сохранялся только Pipeline.
+                self.pipeline = loaded
+                self.feature_columns = DEFAULT_FEATURE_COLUMNS[:]
+                self.categorical_features = ['Происхождение', 'Структура', 'Минеральный состав']
+                self.numeric_features = ['Плотность']
         except Exception as exc:  # pragma: no cover - защита на случай повреждённого файла
             self.error_message = f'Не удалось загрузить ML-модель: {exc}'
 
@@ -26,14 +43,26 @@ class MlRockClassifier:
     def is_ready(self) -> bool:
         return self.pipeline is not None
 
-    def predict(self, features: dict[str, object], allowed_labels: list[str] | None = None, top_n: int = 3) -> tuple[str, list[tuple[str, float]]]:
+    def _prepare_sample(self, features: dict[str, object]) -> pd.DataFrame:
+        row: dict[str, object] = {}
+        for property_name in self.feature_columns:
+            value = features.get(property_name)
+            if property_name in self.numeric_features:
+                row[property_name] = value if value not in ('', None) else None
+            else:
+                row[property_name] = '' if value is None else value
+        return pd.DataFrame([row], columns=self.feature_columns)
+
+    def predict(
+        self,
+        features: dict[str, object],
+        allowed_labels: list[str] | None = None,
+        top_n: int = 3,
+    ) -> tuple[str, list[tuple[str, float]]]:
         if not self.is_ready:
             raise RuntimeError(self.error_message or 'ML-модель недоступна.')
 
-        sample = pd.DataFrame(
-            [features],
-            columns=['Происхождение', 'Структура', 'Минеральный состав', 'Плотность'],
-        )
+        sample = self._prepare_sample(features)
         probabilities = self.pipeline.predict_proba(sample)[0]
         labels = list(self.pipeline.classes_)
         scored = list(zip(labels, probabilities, strict=True))

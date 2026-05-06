@@ -25,6 +25,7 @@ def main() -> None:
     print('ML-модель обучена и сохранена.')
     print(f"Accuracy: {result['accuracy']:.4f}")
     print(f"Строк в синтетической выборке: {result['rows']}")
+    print(f"Использовано свойств-признаков: {len(result.get('features', []))}")
     print(f"Файл модели: {result['model_path']}")
     print(f"CSV базы знаний: {result['expert_csv_path']}")
 
